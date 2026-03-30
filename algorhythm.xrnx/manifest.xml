@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<RenoiseScriptingTool doc_version="0">
+  <Id>com.fluxrhythm.algorhythm</Id>
+  <ApiVersion>6.2</ApiVersion>
+  <Version>0.1.0</Version>
+  <Author>FluxRhythm</Author>
+  <Name>AlgoRhythm</Name>
+  <Category>Pattern Tools</Category>
+  <Description>Algorithmic rhythm and phrase generator. Euclidean, Bresenham, Cellular Automata, Markov chains, Logistic map, and Perlin noise — with Evolve mode for self-mutating patterns. Writes to native Renoise phrases or sends live MIDI.</Description>
+</RenoiseScriptingTool>

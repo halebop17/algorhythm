@@ -1,0 +1,262 @@
+
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+.wrap { font-family: var(--font-sans); padding: 4px 0 12px; }
+.legend { display: flex; gap: 16px; margin-bottom: 14px; font-size: 11px; color: var(--color-text-secondary); align-items: center; }
+.dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; margin-right: 4px; }
+.dot-yes { background: #1D9E75; }
+.dot-partial { background: #BA7517; }
+.dot-no { background: #A32D2D; }
+.dot-you { background: #534AB7; }
+
+table { width: 100%; border-collapse: collapse; font-size: 12px; }
+thead th {
+  text-align: left;
+  padding: 6px 10px;
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--color-text-tertiary);
+  border-bottom: 0.5px solid var(--color-border-secondary);
+  background: var(--color-background-tertiary);
+}
+thead th:not(:first-child) { text-align: center; width: 110px; }
+
+.section-row td {
+  padding: 7px 10px 3px;
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-text-tertiary);
+  background: var(--color-background-tertiary);
+  border-top: 0.5px solid var(--color-border-tertiary);
+}
+tr.feature-row td {
+  padding: 7px 10px;
+  border-bottom: 0.5px solid var(--color-border-tertiary);
+  vertical-align: top;
+  color: var(--color-text-primary);
+}
+tr.feature-row td:first-child { font-size: 12px; line-height: 1.4; }
+tr.feature-row td:not(:first-child) { text-align: center; }
+tr.feature-row:last-child td { border-bottom: none; }
+
+.badge {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.6;
+}
+.b-yes { background: rgba(29,158,117,0.15); color: #0F6E56; border: 0.5px solid #5DCAA5; }
+.b-partial { background: rgba(186,117,23,0.12); color: #854F0B; border: 0.5px solid #EF9F27; }
+.b-no { background: rgba(163,45,45,0.1); color: #791F1F; border: 0.5px solid #E24B4A; }
+.b-you { background: rgba(83,74,183,0.12); color: #3C3489; border: 0.5px solid #7F77DD; }
+
+@media (prefers-color-scheme: dark) {
+  .b-yes { color: #9FE1CB; }
+  .b-partial { color: #FAC775; }
+  .b-no { color: #F7C1C1; }
+  .b-you { color: #CCC9F7; }
+}
+
+.note { font-size: 10px; color: var(--color-text-tertiary); margin-top: 2px; }
+</style>
+
+<div class="wrap">
+<div class="legend">
+  <span><span class="dot dot-yes"></span>Built-in</span>
+  <span><span class="dot dot-partial"></span>Partial / manual</span>
+  <span><span class="dot dot-no"></span>Not present</span>
+  <span><span class="dot dot-you"></span>You implement in Lua</span>
+</div>
+
+<table>
+<thead>
+  <tr>
+    <th>Feature</th>
+    <th>Subsequence</th>
+    <th>pattrns</th>
+    <th>Your tool</th>
+  </tr>
+</thead>
+<tbody>
+
+<tr class="section-row"><td colspan="4">Rhythm generators</td></tr>
+<tr class="feature-row">
+  <td>Euclidean rhythm<div class="note">Bjorklund distribution</div></td>
+  <td><span class="badge b-yes">Built-in</span></td>
+  <td><span class="badge b-yes">Built-in</span></td>
+  <td><span class="badge b-yes">Free</span></td>
+</tr>
+<tr class="feature-row">
+  <td>Bresenham distribution<div class="note">Multi-voice interlocking</div></td>
+  <td><span class="badge b-yes">Built-in</span></td>
+  <td><span class="badge b-no">None</span></td>
+  <td><span class="badge b-you">~30 lines Lua</span></td>
+</tr>
+<tr class="feature-row">
+  <td>Cellular automata<div class="note">Rules 30, 90, 110</div></td>
+  <td><span class="badge b-yes">Built-in</span></td>
+  <td><span class="badge b-no">None</span></td>
+  <td><span class="badge b-you">~40 lines Lua</span></td>
+</tr>
+<tr class="feature-row">
+  <td>Logistic map / chaos<div class="note">r param: stable → chaos</div></td>
+  <td><span class="badge b-yes">Built-in</span></td>
+  <td><span class="badge b-no">None</span></td>
+  <td><span class="badge b-you">~15 lines Lua</span></td>
+</tr>
+<tr class="feature-row">
+  <td>Perlin noise modulation<div class="note">Smooth organic variation</div></td>
+  <td><span class="badge b-yes">Built-in</span></td>
+  <td><span class="badge b-no">None</span></td>
+  <td><span class="badge b-you">~50 lines Lua</span></td>
+</tr>
+<tr class="feature-row">
+  <td>Mini-notation (Tidal)<div class="note">e.g. "bd(3,8) sn(2,8)"</div></td>
+  <td><span class="badge b-yes">Built-in</span></td>
+  <td><span class="badge b-yes">Built-in</span></td>
+  <td><span class="badge b-yes">Free</span></td>
+</tr>
+<tr class="feature-row">
+  <td>Per-step probability<div class="note">Each step fires at X%</div></td>
+  <td><span class="badge b-yes">Built-in</span></td>
+  <td><span class="badge b-yes">Built-in</span></td>
+  <td><span class="badge b-yes">Free</span></td>
+</tr>
+<tr class="feature-row">
+  <td>Ghost notes / density layers<div class="note">Probability-biased fills</div></td>
+  <td><span class="badge b-yes">Built-in</span></td>
+  <td><span class="badge b-partial">Manual in Lua</span></td>
+  <td><span class="badge b-you">~20 lines Lua</span></td>
+</tr>
+
+<tr class="section-row"><td colspan="4">Harmony &amp; melody</td></tr>
+<tr class="feature-row">
+  <td>Scale quantization<div class="note">Snap notes to a mode</div></td>
+  <td><span class="badge b-yes">Built-in</span></td>
+  <td><span class="badge b-yes">Built-in</span></td>
+  <td><span class="badge b-yes">Free</span></td>
+</tr>
+<tr class="feature-row">
+  <td>Chord notation &amp; inversions<div class="note">c4'M, dom7, voice leading</div></td>
+  <td><span class="badge b-yes">Built-in</span></td>
+  <td><span class="badge b-partial">Chords yes, no auto voice-lead</span></td>
+  <td><span class="badge b-you">Voice leading ~60 lines</span></td>
+</tr>
+<tr class="feature-row">
+  <td>Weighted chord transition graph<div class="note">11 built-in styles (dorian, lydian…)</div></td>
+  <td><span class="badge b-yes">Built-in</span></td>
+  <td><span class="badge b-no">None</span></td>
+  <td><span class="badge b-you">Core feature to build</span></td>
+</tr>
+<tr class="feature-row">
+  <td>Narmour melody cognition<div class="note">Gap-fill, implication-realization</div></td>
+  <td><span class="badge b-yes">Built-in</span></td>
+  <td><span class="badge b-no">None</span></td>
+  <td><span class="badge b-you">Optional — complex to port</span></td>
+</tr>
+<tr class="feature-row">
+  <td>Markov chain melody/bass<div class="note">Weighted note transitions</div></td>
+  <td><span class="badge b-yes">Built-in</span></td>
+  <td><span class="badge b-partial">Manual with math.random</span></td>
+  <td><span class="badge b-you">~40 lines Lua</span></td>
+</tr>
+<tr class="feature-row">
+  <td>Diatonic degree sequencing<div class="note">I III V VII cycle</div></td>
+  <td><span class="badge b-yes">Built-in</span></td>
+  <td><span class="badge b-yes">Built-in</span></td>
+  <td><span class="badge b-yes">Free</span></td>
+</tr>
+
+<tr class="section-row"><td colspan="4">Pattern evolution &amp; structure</td></tr>
+<tr class="feature-row">
+  <td>Stateful patterns (memory across cycles)<div class="note">Pattern knows what happened last bar</div></td>
+  <td><span class="badge b-yes">Built-in</span></td>
+  <td><span class="badge b-partial">Via Lua closures only</span></td>
+  <td><span class="badge b-you">Managed in tool state</span></td>
+</tr>
+<tr class="feature-row">
+  <td>Form sections (intro/verse/chorus)<div class="note">Graph or list-based structure</div></td>
+  <td><span class="badge b-yes">Built-in</span></td>
+  <td><span class="badge b-no">None</span></td>
+  <td><span class="badge b-you">Optional for v1</span></td>
+</tr>
+<tr class="feature-row">
+  <td>Conductor signals (LFO / ramps)<div class="note">Global intensity over time</div></td>
+  <td><span class="badge b-yes">Built-in</span></td>
+  <td><span class="badge b-no">None</span></td>
+  <td><span class="badge b-you">Useful — ~60 lines</span></td>
+</tr>
+<tr class="feature-row">
+  <td>Frozen progressions<div class="note">Lock a section's chords</div></td>
+  <td><span class="badge b-yes">Built-in</span></td>
+  <td><span class="badge b-no">None</span></td>
+  <td><span class="badge b-you">Optional</span></td>
+</tr>
+<tr class="feature-row">
+  <td>Deterministic seed<div class="note">Repeat exact "random" output</div></td>
+  <td><span class="badge b-yes">Built-in</span></td>
+  <td><span class="badge b-yes">Built-in</span></td>
+  <td><span class="badge b-yes">Free</span></td>
+</tr>
+
+<tr class="section-row"><td colspan="4">Expression &amp; feel</td></tr>
+<tr class="feature-row">
+  <td>Swing / groove templates<div class="note">Ableton .agr import</div></td>
+  <td><span class="badge b-yes">Built-in</span></td>
+  <td><span class="badge b-partial">Delay column manually</span></td>
+  <td><span class="badge b-you">~30 lines Lua</span></td>
+</tr>
+<tr class="feature-row">
+  <td>Velocity shaping &amp; humanize<div class="note">van der Corput distribution</div></td>
+  <td><span class="badge b-yes">Built-in</span></td>
+  <td><span class="badge b-partial">Manual per-step</span></td>
+  <td><span class="badge b-you">~20 lines Lua</span></td>
+</tr>
+<tr class="feature-row">
+  <td>Pitch bend / portamento / slide<div class="note">TB-303 style slide</div></td>
+  <td><span class="badge b-yes">Built-in</span></td>
+  <td><span class="badge b-no">None</span></td>
+  <td><span class="badge b-you">Via Renoise effect columns</span></td>
+</tr>
+
+<tr class="section-row"><td colspan="4">Integration</td></tr>
+<tr class="feature-row">
+  <td>DAW clock sync<div class="note">Follows song position</div></td>
+  <td><span class="badge b-partial">External clock only</span></td>
+  <td><span class="badge b-yes">Native — it IS Renoise</span></td>
+  <td><span class="badge b-yes">Free</span></td>
+</tr>
+<tr class="feature-row">
+  <td>MIDI output to VST / hardware</td>
+  <td><span class="badge b-yes">Built-in</span></td>
+  <td><span class="badge b-partial">Only via Renoise phrase routing</span></td>
+  <td><span class="badge b-yes">Via Renoise MIDI API</span></td>
+</tr>
+<tr class="feature-row">
+  <td>Write to native phrases</td>
+  <td><span class="badge b-no">None</span></td>
+  <td><span class="badge b-yes">Native — this is pattrns</span></td>
+  <td><span class="badge b-yes">Free</span></td>
+</tr>
+<tr class="feature-row">
+  <td>Live-code / hot-swap patterns<div class="note">Change during playback</div></td>
+  <td><span class="badge b-yes">Built-in TCP server</span></td>
+  <td><span class="badge b-yes">Built-in (edit script live)</span></td>
+  <td><span class="badge b-yes">UI sliders = live coding</span></td>
+</tr>
+<tr class="feature-row">
+  <td>Parameter UI / controller mapping</td>
+  <td><span class="badge b-partial">CC input mapping only</span></td>
+  <td><span class="badge b-partial">Sliders only, auto-generated</span></td>
+  <td><span class="badge b-yes">Full custom UI</span></td>
+</tr>
+
+</tbody>
+</table>
+</div>
