@@ -15,6 +15,7 @@ VoiceState.ALGO_MARKOV    = "markov"
 VoiceState.ALGO_LOGISTIC  = "logistic"
 VoiceState.ALGO_PERLIN    = "perlin"
 VoiceState.ALGO_RANDOM    = "random"
+VoiceState.ALGO_STRAIGHT  = "straight"
 
 function VoiceState.new(name, index)
   local self = setmetatable({}, VoiceState)
@@ -34,8 +35,9 @@ function VoiceState.new(name, index)
   self.phrase_index     = index or 1  -- phrase slot to write to
   self.output_mode      = "phrase"    -- "phrase" or "midi"  (Phase 4)
   self.midi_channel     = 1
-  self.midi_device_name = nil
-  self._cached_pattern  = nil   -- last generated bool[]
+  self.midi_device_name    = nil
+  self._straight_interval  = 4   -- 4=quarter, 2=eighth, 1=sixteenth, 3=triplet
+  self._cached_pattern     = nil  -- last generated bool[]
   return self
 end
 

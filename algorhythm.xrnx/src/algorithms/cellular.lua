@@ -11,6 +11,7 @@
 local Cellular = {}
 
 -- Apply one generation of a 1D elementary CA rule to a boolean row
+local bit = require("bit")  -- LuaJIT bit library (available in Renoise)
 local function step_ca(row, rule_number)
   local n = #row
   local next_row = {}
@@ -19,8 +20,8 @@ local function step_ca(row, rule_number)
     local center = row[i]                   and 1 or 0
     local right  = row[(i % n) + 1]        and 1 or 0
     local index  = left * 4 + center * 2 + right  -- 0-7
-    -- Extract bit from rule number
-    next_row[i] = ((rule_number >> index) & 1) == 1
+    -- Extract bit from rule number (LuaJIT bit library)
+    next_row[i] = bit.band(bit.rshift(rule_number, index), 1) == 1
   end
   return next_row
 end

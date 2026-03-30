@@ -14,8 +14,10 @@ function SongState.new()
   self.scale_index = 1    -- index into Scales.DEFINITIONS
   self.root_note   = 0    -- 0=C, 1=C#, … 11=B
   self.seed        = 42
-  self.evolve_mode = SongState.EVOLVE_OFF
-  self.voices      = { VoiceState.new("Voice 1", 1) }
+  self.evolve_mode   = SongState.EVOLVE_OFF
+  self.phrase_length  = 0     -- 0 = voice.steps (auto); 32/64/128/256/512 = baked length
+  self.phrase_slot    = 1     -- which phrase slot Render targets
+  self.voices         = { VoiceState.new("Voice 1", 1) }
   return self
 end
 
