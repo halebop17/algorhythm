@@ -38,7 +38,53 @@ function VoiceState.new(name, index)
   self.midi_device_name    = nil
   self._straight_interval  = 4   -- 4=quarter, 2=eighth, 1=sixteenth, 3=triplet
   self._cached_pattern     = nil  -- last generated bool[]
+  -- Phase 6a/6b: per-step expression maps
+  self.vel_min  = 1;   self.vel_max  = 127  -- range clamp for velocity lane
+  self.gate_min = 1;   self.gate_max = 100  -- range clamp for gate lane
+  self:init_step_maps(self.steps)
   return self
+end
+
+-- Initialise all per-step maps to defaults for `steps` steps.
+function VoiceState:init_step_maps(steps)
+  self.vel_map      = {}
+  self.gate_map     = {}
+  self.pitch_a_map  = {}
+  self.pitch_b_map  = {}
+  self.pitch_ab_map = {}
+  self.ratchet_map  = {}
+  self.delay_map    = {}
+  local base = self.note_value or 48
+  for i = 1, steps do
+    self.vel_map[i]      = 100
+    self.gate_map[i]     = 100
+    self.pitch_a_map[i]  = base
+    self.pitch_b_map[i]  = base
+    self.pitch_ab_map[i] = 50
+    self.ratchet_map[i]  = 1
+    self.delay_map[i]    = 0    -- 0 = no delay
+  end
+end
+
+-- Resize maps when steps changes; preserve existing values, fill new slots with defaults.
+function VoiceState:resize_maps(new_steps)
+  local base = self.note_value or 48
+  for i = self.steps + 1, new_steps do
+    self.vel_map[i]      = self.vel_map[i]      or 100
+    self.gate_map[i]     = self.gate_map[i]     or 100
+    self.pitch_a_map[i]  = self.pitch_a_map[i]  or base
+    self.pitch_b_map[i]  = self.pitch_b_map[i]  or base
+    self.pitch_ab_map[i] = self.pitch_ab_map[i] or 50
+    self.ratchet_map[i]  = self.ratchet_map[i]  or 1
+    self.delay_map[i]    = self.delay_map[i]    or 0
+  end
+  for i = new_steps + 1, #self.vel_map      do self.vel_map[i]      = nil end
+  for i = new_steps + 1, #self.gate_map     do self.gate_map[i]     = nil end
+  for i = new_steps + 1, #self.pitch_a_map  do self.pitch_a_map[i]  = nil end
+  for i = new_steps + 1, #self.pitch_b_map  do self.pitch_b_map[i]  = nil end
+  for i = new_steps + 1, #self.pitch_ab_map do self.pitch_ab_map[i] = nil end
+  for i = new_steps + 1, #self.ratchet_map  do self.ratchet_map[i]  = nil end
+  for i = new_steps + 1, #self.delay_map    do self.delay_map[i]    = nil end
 end
 
 return VoiceState

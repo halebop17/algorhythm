@@ -19,7 +19,7 @@ A Renoise `.xrnx` tool that generates algorithmic rhythms and phrases using mult
 | v1 scope | Rhythm only — all 6 algorithms + Evolve | Harmony engine (chord graphs, Markov melody) is complex; defer to v2 |
 | Phrase engine | Direct phrase writing via `instrument.phrases[n]` API | Avoids `pattrns set_script` which has unconfirmed Tool-side API |
 | Voice model | `{instrument, note, pitch_mode}` per lane | Multiple lanes can share same instrument (drum kit use case) |
-| Max voices | 8 lanes UI cap; 12 lanes per instrument (phrase note column limit) | Practical ceiling; 12 = Renoise phrase max note columns |
+| Max voices | 6 lanes UI cap; 12 lanes per instrument (phrase note column limit) | Practical ceiling; 6 covers all typical drum/pitched-voice use cases |
 
 ---
 
@@ -147,10 +147,45 @@ To distribute: ZIP the folder contents, rename to `algorhythm.xrnx`.
 - [ ] Slow mode = mutate every 4 bars; Fast = every bar
 - [ ] Randomize = full reseed; Mutate = ±10% delta from current state
 
-### Phase 6 — Expression Details
-- [ ] Swing: offset even-step timing via `note_columns[n].delay_value` (0–255)
-- [ ] Velocity humanization: Van der Corput quasi-random distribution
-- [ ] Note length variation per step
+### Phase 6 — Expression Details (Seqund-inspired) ✅ *planned*
+
+**Architecture decisions:**
+- Expression is **per-voice** (each lane has its own independent maps)
+- Pitch maps are externally writable (v2 chord engine will feed `pitch_a_map`/`pitch_b_map`)
+- Max voices reduced to **6** (was 8)
+- Step sliders count = `voice.steps`; inactive steps shown as grayed-out placeholders
+
+**Data changes — `voice_state.lua`:**
+- Add `vel_map[]` (default 100 per step), `gate_map[]` (default 100 per step)
+- Add `pitch_a_map[]`, `pitch_b_map[]` (MIDI note per step, default = `voice.note_value`)
+- Add `prob_map[]` (0–100 per step, default 100), `ratchet_map[]` (1–4 per step, default 1)
+- Add `delay_map[]` (0–127 per step, default 0)
+- Add `pitch_a_steps`, `pitch_b_steps` (independent step counts, default = `voice.steps`)
+- Add `direction` field: `"fwd"` / `"rev"` / `"pingpong"` (default `"fwd"`)
+- Add `init_step_maps(steps)` helper; `resize_maps(new_steps)` called when steps valuebox changes
+
+**Phase 6a — Velocity + Gate maps:**
+- [ ] `voice_state.lua`: add `vel_map`, `gate_map`, `init_step_maps()`, `resize_maps()`
+- [ ] `song_state.lua`: reduce max voices to 6
+- [ ] `phrase_writer.lua`: `write_column()` reads `voice.vel_map[step]` for `volume_value`; reads `voice.gate_map[step]` as per-step gate probability (0–100)
+- [ ] `main_panel.lua`: "Expr ▼" toggle per voice lane; Expression sub-panel with lane selector (Velocity / Gate) and N minisliders + inactive placeholders; "Rand" button per lane; steps notifier calls `voice:resize_maps(val)`
+- [ ] Cap `+ Voice` button at 6
+
+**Phase 6b — Pitch A/B dual lanes + scale quantize:**
+- [ ] `voice_state.lua`: add `pitch_a_map`, `pitch_b_map`, `pitch_a_steps`, `pitch_b_steps`
+- [ ] `phrase_writer.lua`: inner loop — on each active step, if `pitch_a_map` non-nil: alternate A/B per step, run `Scales.quantize()` on each value, write to `note_value`
+- [ ] `main_panel.lua`: add "Pitch A", "Pitch B" to lane dropdown; "Rand Pitches" seeds from `Scales.notes_in_range()`; "Link B→A" copies `pitch_a_map` → `pitch_b_map`
+- [ ] Prob lane view option: per-step probability instead of global slider override
+
+**Phase 6c — Ratchet (Rxy retrigger):**
+- [ ] `voice_state.lua`: add `ratchet_map[]` (1–4 per step, default 1), `ratchet_steps`
+- [ ] `phrase_writer.lua`: when `ratchet_map[step] > 1`, write Renoise `Rxy` retrigger command to effect column: `r_value = tpl / ratchet_count`, effect column value = `0x0D00 + r_value`
+- [ ] `main_panel.lua`: "Ratchet" lane option in expression dropdown; sliders show 1–4
+
+**Phase 6d — Micro-timing + Direction:**
+- [ ] `voice_state.lua`: `delay_map[]` (0–127 per step), `direction` field
+- [ ] `phrase_writer.lua`: `note_columns[col].delay_value = delay_map[step] * 2`; direction transforms gate pattern before write loop (rev = reverse, pingpong = reverse on even blocks)
+- [ ] `main_panel.lua`: "Delay" lane option; Direction popup (Fwd / Rev / Ping-pong) in Row A
 
 ### Phase 7 — Presets + Polish
 - [ ] Save/load state as JSON via `io.open()` in Renoise tool data folder

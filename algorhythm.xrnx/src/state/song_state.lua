@@ -16,14 +16,14 @@ function SongState.new()
   self.seed        = 42
   self.evolve_mode   = SongState.EVOLVE_OFF
   self.phrase_length  = 0     -- 0 = voice.steps (auto); 32/64/128/256/512 = baked length
-  self.phrase_slot    = 1     -- which phrase slot Render targets
+  self.append_count   = 1     -- how many phrases Append inserts
   self.voices         = { VoiceState.new("Voice 1", 1) }
   return self
 end
 
--- Add a voice lane (max 8)
+-- Add a voice lane (max 6)
 function SongState:add_voice()
-  if #self.voices >= 8 then return nil end
+  if #self.voices >= 6 then return nil end
   local v = VoiceState.new("Voice " .. (#self.voices + 1), #self.voices + 1)
   self.voices[#self.voices + 1] = v
   return v

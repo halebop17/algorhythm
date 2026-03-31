@@ -3,21 +3,113 @@
 -- one phrase using separate note columns (max 12 per phrase).
 
 local PhraseWriter = {}
+local Scales = require("src/utils/scales")
 
 local EMPTY = renoise.PatternLine.EMPTY_NOTE
 
 -- Write one column of a phrase for a single voice.
+-- Prob %    = global fire probability (voice.probability).
+-- Gate %    = note length as % of step duration; implemented as NOTE_OFF insertion.
+-- Ratchet   = number of evenly-spaced note triggers within one step (1=off, 2-4=retrigger).
+-- Delay     = per-step timing offset written to note_column.delay_value (0-255).
+-- Pitch A/B = selected per step by ab_map, then scale-quantized.
 local function write_column(phrase, col_idx, pattern, voice)
-  local prob = math.max(0, math.min(voice.probability or 100, 100))
-  local num_lines = phrase.number_of_lines
+  local global_prob  = math.max(0, math.min(voice.probability or 100, 100))
+  local num_lines    = phrase.number_of_lines
+  local vel_map      = voice.vel_map
+  local gate_map     = voice.gate_map
+  local ratchet_map  = voice.ratchet_map
+  local delay_map    = voice.delay_map
+  local pitch_a      = voice.pitch_a_map
+  local pitch_b      = voice.pitch_b_map
+  local scale_idx    = voice._scale_index or 1
+  local root         = voice._root_note   or 0
+  local ab_map       = voice.pitch_ab_map
+  local map_steps    = voice.steps or 16
+  local step_size    = math.max(1, math.floor(num_lines / map_steps))
+  local NOTE_OFF_VAL = renoise.PatternLine.NOTE_OFF
+
+  -- Clear the entire column first so stale data from previous renders doesn't linger
+  for s = 1, num_lines do
+    local nc = phrase:line(s).note_columns[col_idx]
+    nc.note_value   = EMPTY
+    nc.volume_value = 255
+    nc.delay_value  = 0
+  end
+
+  -- Forward pass: write notes + gate NOTE_OFFs
   for step = 1, num_lines do
-    local nc = phrase:line(step).note_columns[col_idx]
-    if pattern[step] and (prob >= 100 or math.random(100) <= prob) then
-      nc.note_value   = math.max(0, math.min(voice.note_value or 48,  119))
-      nc.volume_value = math.max(0, math.min(voice.velocity   or 100, 127))
-    else
-      nc.note_value   = EMPTY
-      nc.volume_value = 255
+    local ms       = (math.floor((step - 1) / step_size) % map_steps) + 1
+    local pat_step = pattern[step]
+
+    -- Prob %: global fire probability applied uniformly to every active step
+    if pat_step and (global_prob >= 100 or math.random(100) <= global_prob) then
+      local nc = phrase:line(step).note_columns[col_idx]
+
+      -- Pitch A/B: per-step probability (ab_map); 100=always A, 0=always B
+      local raw_note
+      if pitch_a and pitch_b then
+        local ab_prob = (ab_map and ab_map[ms]) or 50
+        raw_note = (math.random(100) <= ab_prob) and (pitch_a[ms] or voice.note_value or 48)
+                                                  or (pitch_b[ms] or voice.note_value or 48)
+      else
+        raw_note = voice.note_value or 48
+      end
+
+      -- Scale-quantize if a non-chromatic scale is active
+      local note
+      if scale_idx and scale_idx > 1 then
+        note = Scales.quantize(raw_note, scale_idx, root)
+      else
+        note = math.max(0, math.min(raw_note, 119))
+      end
+      nc.note_value   = note
+      local vel = (vel_map and vel_map[ms]) and vel_map[ms] or (voice.velocity or 100)
+      nc.volume_value = math.max(0, math.min(vel, 127))
+
+      -- Delay: per-step timing offset (0-255)
+      if delay_map and delay_map[ms] then
+        nc.delay_value = math.max(0, math.min(delay_map[ms], 255))
+      end
+
+      -- Gate %: insert NOTE_OFF based on gate % of step_size.
+      -- Only meaningful when step_size > 1.
+      if step_size > 1 then
+        local gate_pct   = (gate_map and gate_map[ms]) and gate_map[ms] or 100
+        local gate_lines = math.max(1, math.floor((gate_pct / 100) * step_size))
+        local off_line   = step + gate_lines
+        if off_line <= num_lines then
+          local off_nc = phrase:line(off_line).note_columns[col_idx]
+          if off_nc.note_value == EMPTY then
+            off_nc.note_value = NOTE_OFF_VAL
+          end
+        end
+      end
+    end
+  end
+
+  -- Ratchet post-pass: duplicate the note at evenly-spaced sub-line positions.
+  -- Only works when step_size > 1 (multiple phrase lines per pattern step).
+  if step_size > 1 and ratchet_map then
+    for step = 1, num_lines do
+      local ms = (math.floor((step - 1) / step_size) % map_steps) + 1
+      local r  = math.max(1, math.floor(ratchet_map[ms] or 1))
+      if r > 1 then
+        local nc = phrase:line(step).note_columns[col_idx]
+        if nc.note_value ~= EMPTY and nc.note_value ~= NOTE_OFF_VAL then
+          local sub_interval = step_size / r
+          for hit = 1, r - 1 do
+            local sub_line = step + math.floor(hit * sub_interval)
+            if sub_line <= num_lines then
+              local sub_nc = phrase:line(sub_line).note_columns[col_idx]
+              if sub_nc.note_value == EMPTY then
+                sub_nc.note_value   = nc.note_value
+                sub_nc.volume_value = nc.volume_value
+              end
+            end
+          end
+        end
+      end
     end
   end
 end

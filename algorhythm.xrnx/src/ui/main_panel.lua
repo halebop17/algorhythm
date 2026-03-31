@@ -14,12 +14,14 @@ local RandomW      = require("src/algorithms/random_weighted")
 local Straight     = require("src/algorithms/straight")
 local PhraseWriter = require("src/output/phrase_writer")
 local Evolve       = require("src/state/evolve")
+local Presets      = require("src/state/presets")
 
 local MainPanel = {}
 
 local state  = SongState.new()
 local dialog = nil
 local vb     = nil
+local last_preset_idx = 1  -- remembered across rebuilds so popup stays on selected preset
 
 local ALGORITHMS = {
   { id = VoiceState.ALGO_EUCLIDEAN, label = "Euclidean", mod = Euclidean },
@@ -40,8 +42,11 @@ local USES_PULSES = {
   [VoiceState.ALGO_BRESENHAM] = true,
 }
 
-local COL_ACTIVE   = {76, 182, 139}
-local COL_INACTIVE = {40,  40,  40}
+local COL_ACTIVE   = {76, 182, 139}   -- green: hit step within voice.steps
+local COL_INACTIVE = {58,  58,  62}   -- visible mid-gray: no-hit within voice.steps
+local COL_GHOST    = {28,  28,  32}   -- near-black with slight blue: beyond voice.steps
+local COL_VEL      = {220, 145,  45}  -- amber: velocity lane
+local COL_GATE     = { 70, 150, 215}  -- blue:  gate lane
 local GRID_STEPS   = 16
 
 local VOICE_COLORS = {
@@ -64,6 +69,85 @@ local PHRASE_LENGTH_LABELS = {"Auto", "32", "64", "128", "256", "512"}
 local PANEL_W = 660
 
 local rebuild  -- forward declaration
+
+-- ── Preset bar ───────────────────────────────────────────────────────────────
+
+local function build_preset_bar()
+  local names = Presets.list_names()
+  if #names == 0 then names = {"(none)"} end
+  local safe_idx = math.max(1, math.min(last_preset_idx, #names))
+
+  return vb:row {
+    spacing = 6,
+    vb:text { text = "Preset:", width = 50 },
+    vb:popup {
+      id    = "preset_popup",
+      items = names,
+      value = safe_idx,
+      width = 168,
+    },
+    vb:button {
+      text = "Load", width = 48,
+      notifier = function()
+        local pp   = vb.views["preset_popup"]
+        local idx  = pp and pp.value or 1
+        local data = Presets.get_by_index(idx)
+        if data then
+          last_preset_idx = idx
+          Presets.apply(data, state, VoiceState)
+          rebuild()
+        end
+      end,
+    },
+    vb:text { text = "|", width = 10 },
+    vb:textfield {
+      id    = "preset_name_field",
+      text  = "",
+      width = 140,
+    },
+    vb:button {
+      text = "Save", width = 48,
+      notifier = function()
+        local tf   = vb.views["preset_name_field"]
+        local name = (tf and tf.text or ""):match("^%s*(.-)%s*$")
+        if name == "" then
+          renoise.app():show_error("Enter a preset name first.")
+          return
+        end
+        if Presets.save(name, state) then
+          -- Position popup on the saved preset after rebuild
+          local all_names = Presets.list_names()
+          for i, n in ipairs(all_names) do
+            if n == name then last_preset_idx = i; break end
+          end
+          renoise.app():show_status("AlgoRhythm: Saved preset '" .. name .. "'.")
+          rebuild()
+        else
+          renoise.app():show_error("AlgoRhythm: Could not write preset file.")
+        end
+      end,
+    },
+    vb:button {
+      text = "Delete", width = 56,
+      notifier = function()
+        local pp  = vb.views["preset_popup"]
+        local idx = pp and pp.value or 1
+        if Presets.is_builtin(idx) then
+          renoise.app():show_error("Built-in presets cannot be deleted.")
+          return
+        end
+        local user = Presets.load_user()
+        local ui   = idx - #Presets.BUILTIN
+        local pname = user[ui] and user[ui].name or ""
+        if pname == "" then return end
+        Presets.delete(pname)
+        last_preset_idx = 1
+        renoise.app():show_status("AlgoRhythm: Deleted preset '" .. pname .. "'.")
+        rebuild()
+      end,
+    },
+  }
+end
 
 -- ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -153,13 +237,253 @@ end
 
 local function refresh_grid(v_idx)
   if not vb then return end
-  local pattern = state.voices[v_idx]._cached_pattern or {}
+  local voice   = state.voices[v_idx]
+  local pattern = voice._cached_pattern or {}
   for s = 1, GRID_STEPS do
     local btn = vb.views["step_v" .. v_idx .. "_s" .. s]
     if btn then
-      btn.color = (pattern[s] == true) and COL_ACTIVE or COL_INACTIVE
+      if s > voice.steps then
+        btn.color = COL_GHOST
+      elseif pattern[s] then
+        btn.color = COL_ACTIVE
+      else
+        btn.color = COL_INACTIVE
+      end
     end
   end
+end
+
+-- Update slider values and show/hide step columns for both expr lanes.
+local function refresh_expr_lane(v_idx)
+  if not vb then return end
+  local voice = state.voices[v_idx]
+  local configs = {
+    { key = "vel",      map = voice.vel_map,      max_val = 127 },
+    { key = "gate",     map = voice.gate_map,     max_val = 100 },
+    { key = "pitch_a",  map = voice.pitch_a_map,  max_val = 119 },
+    { key = "pitch_b",  map = voice.pitch_b_map,  max_val = 119 },
+    { key = "pitch_ab", map = voice.pitch_ab_map, max_val = 100 },
+    { key = "ratchet",  map = voice.ratchet_map,  max_val = 4   },
+    { key = "delay",    map = voice.delay_map,    max_val = 255 },
+  }
+  for _, lc in ipairs(configs) do
+    for s = 1, 16 do
+      local col = vb.views["expr_" .. lc.key .. "_col_v" .. v_idx .. "_s" .. s]
+      local sl  = vb.views["expr_" .. lc.key .. "_sl_v"  .. v_idx .. "_s" .. s]
+      if col then col.visible = (s <= voice.steps) end
+      if sl and lc.map[s] then sl.value = lc.map[s] end
+      local vl = vb.views["expr_" .. lc.key .. "_val_v"  .. v_idx .. "_s" .. s]
+      if vl and lc.map[s] then vl.text = string.format("%3d", lc.map[s]) end
+    end
+  end
+end
+
+-- Build the expression sub-panel for one voice lane (pre-builds all 16 slots per lane).
+local function build_expr_panel(v_idx)
+  local voice = state.voices[v_idx]
+  local COL_PITCH_B  = {110, 195, 195}  -- cyan for Pitch B lane
+  local COL_PITCH_AB = {160, 120, 200}  -- purple for A/B Prob lane
+  local LANE_CONFIGS = {
+    { key = "vel",      label = "VELOCITY",  color = COL_VEL,      min_val = 1, max_val = 127,
+      map_fn = function() return voice.vel_map      end },
+    { key = "gate",     label = "GATE %",    color = COL_GATE,     min_val = 1, max_val = 100,
+      map_fn = function() return voice.gate_map     end },
+    { key = "pitch_a",  label = "PITCH A",   color = COL_ACTIVE,   min_val = 0, max_val = 119,
+      map_fn = function() return voice.pitch_a_map  end },
+    { key = "pitch_b",  label = "PITCH B",   color = COL_PITCH_B,  min_val = 0, max_val = 119,
+      map_fn = function() return voice.pitch_b_map  end },
+    { key = "pitch_ab", label = "A/B PROB",  color = COL_PITCH_AB, min_val = 0,   max_val = 100,
+      map_fn = function() return voice.pitch_ab_map end },
+    { key = "ratchet",  label = "RATCHET",   color = {200, 90, 50},  min_val = 1,   max_val = 4,
+      map_fn = function() return voice.ratchet_map  end },
+    { key = "delay",    label = "DELAY",     color = {120, 200, 220}, min_val = 0,   max_val = 255,
+      map_fn = function() return voice.delay_map    end },
+  }
+
+  -- Helper: pick a random in-scale note from the voice's octave range
+  local function rand_pitch_note()
+    if state.scale_index and state.scale_index > 1 then
+      local pool = Scales.notes_in_range(
+        state.scale_index, state.root_note,
+        voice.octave_min or 3, voice.octave_max or 5)
+      if pool and #pool > 0 then
+        return pool[math.random(#pool)]
+      end
+    end
+    local lo = (voice.octave_min or 3) * 12
+    local hi = math.min((voice.octave_max or 5) * 12 + 11, 119)
+    return math.random(lo, hi)
+  end
+
+  -- Build a pre-populated slider row for each lane
+  local lane_rows = {}
+  for li, lc in ipairs(LANE_CONFIGS) do
+    local row = vb:row {
+      id      = "expr_" .. lc.key .. "_row_v" .. v_idx,
+      spacing = 3,
+      visible = (li == 1),
+    }
+    for s = 1, 16 do
+      local si     = s
+      local min_v  = lc.min_val
+      local max_v  = lc.max_val
+      local map_fn = lc.map_fn
+      local col = vb:column {
+        id      = "expr_" .. lc.key .. "_col_v" .. v_idx .. "_s" .. si,
+        spacing = 2,
+        visible = (si <= voice.steps),
+      }
+      col:add_child(vb:text {
+        id    = "expr_" .. lc.key .. "_val_v" .. v_idx .. "_s" .. si,
+        text  = string.format("%3d", math.floor(math.max(min_v, map_fn()[si] or max_v))),
+        width = 26,
+      })
+      col:add_child(vb:minislider {
+        id    = "expr_" .. lc.key .. "_sl_v" .. v_idx .. "_s" .. si,
+        min   = min_v, max = max_v,
+        value = math.max(min_v, map_fn()[si] or max_v),
+        width = 26, height = 54,
+        notifier = function(val)
+          map_fn()[si] = math.floor(val)
+          local lbl = vb.views["expr_" .. lc.key .. "_val_v" .. v_idx .. "_s" .. si]
+          if lbl then lbl.text = string.format("%3d", math.floor(val)) end
+        end,
+      })
+      -- Number label on every step
+      col:add_child(vb:text {
+        text  = tostring(si),
+        width = 26,
+      })
+      row:add_child(col)
+    end
+    lane_rows[li] = row
+  end
+
+  -- Control row with color swatch + lane picker + actions + title
+  local ctrl = vb:row { spacing = 8 }
+  ctrl:add_child(vb:button {
+    id    = "expr_color_v" .. v_idx,
+    text  = " ", width = 12, height = 14,
+    color = LANE_CONFIGS[1].color,
+  })
+  ctrl:add_child(vb:text { text = "Lane:", width = 36 })
+  ctrl:add_child(vb:popup {
+    id    = "expr_lane_v" .. v_idx,
+    items = {"Velocity", "Gate %", "Pitch A", "Pitch B", "A/B Prob", "Ratchet", "Delay"},
+    value = 1,
+    width = 110,
+    notifier = function(idx)
+      for li, lc in ipairs(LANE_CONFIGS) do
+        local r = vb.views["expr_" .. lc.key .. "_row_v" .. v_idx]
+        if r then r.visible = (li == idx) end
+      end
+      local cs = vb.views["expr_color_v" .. v_idx]
+      if cs then cs.color = LANE_CONFIGS[idx].color end
+      local tl = vb.views["expr_title_v" .. v_idx]
+      if idx == 5 then
+        if tl then tl.text = "── A/B PROB (0=B, 100=A) ──" end
+      elseif idx == 6 then
+        if tl then tl.text = "── RATCHET (1=off, 2–4=retrigger) ──" end
+      elseif idx == 7 then
+        if tl then tl.text = "── DELAY (0=none, 255=full step late) ──" end
+      else
+        if tl then tl.text = "── " .. LANE_CONFIGS[idx].label .. " ──" end
+      end
+      -- Octave range row only for Pitch A / Pitch B
+      local pc = vb.views["pitch_ctrl_v" .. v_idx]
+      if pc then pc.visible = (idx == 3 or idx == 4) end
+    end,
+  })
+  ctrl:add_child(vb:button {
+    text = "Rand", width = 50,
+    notifier = function()
+      local lp  = vb.views["expr_lane_v" .. v_idx]
+      local idx = lp and lp.value or 1
+      local lc  = LANE_CONFIGS[idx]
+      local map = lc.map_fn()
+      if idx == 7 then
+        -- Delay lane: random 0-127 per step (keep to first half for musical swing)
+        for i = 1, voice.steps do map[i] = math.random(0, 127) end
+      elseif idx == 6 then
+        -- Ratchet lane: random 1-4 per step
+        for i = 1, voice.steps do map[i] = math.random(1, 4) end
+      elseif idx == 5 then
+        -- A/B Prob lane: random 0-100 per step
+        for i = 1, voice.steps do map[i] = math.random(0, 100) end
+      elseif idx >= 3 then
+        -- Pitch lane: sample from in-scale note pool
+        for i = 1, voice.steps do map[i] = rand_pitch_note() end
+      else
+        for i = 1, voice.steps do
+          map[i] = math.random(math.floor(lc.max_val * 0.35), lc.max_val)
+        end
+      end
+      refresh_expr_lane(v_idx)
+    end,
+  })
+  ctrl:add_child(vb:button {
+    text = "Reset", width = 50,
+    notifier = function()
+      local lp  = vb.views["expr_lane_v" .. v_idx]
+      local idx = lp and lp.value or 1
+      local lc  = LANE_CONFIGS[idx]
+      local map = lc.map_fn()
+      local reset_val
+      if idx == 7 then
+        reset_val = 0   -- delay off
+      elseif idx == 6 then
+        reset_val = 1   -- ratchet off
+      elseif idx == 5 then
+        reset_val = 50  -- equal A/B
+      elseif idx >= 3 then
+        reset_val = voice.note_value or 48
+      else
+        reset_val = lc.max_val
+      end
+      for i = 1, voice.steps do map[i] = reset_val end
+      refresh_expr_lane(v_idx)
+    end,
+  })
+  ctrl:add_child(vb:text {
+    id   = "expr_title_v" .. v_idx,
+    text = "── VELOCITY ──",
+    font = "bold", width = 110,
+  })
+
+  -- Octave range controls: shown only when Pitch A or Pitch B lane is selected
+  local pitch_ctrl = vb:row {
+    id      = "pitch_ctrl_v" .. v_idx,
+    spacing = 8,
+    visible = false,
+  }
+  pitch_ctrl:add_child(vb:text { text = "Octave Range:", width = 88 })
+  pitch_ctrl:add_child(vb:valuebox {
+    id = "pitch_oct_min_v" .. v_idx,
+    min = 0, max = 8, value = voice.octave_min or 3,
+    width = 46,
+    notifier = function(val) voice.octave_min = val end,
+  })
+  pitch_ctrl:add_child(vb:text { text = "to", width = 16 })
+  pitch_ctrl:add_child(vb:valuebox {
+    id = "pitch_oct_max_v" .. v_idx,
+    min = 0, max = 8, value = voice.octave_max or 5,
+    width = 46,
+    notifier = function(val) voice.octave_max = val end,
+  })
+  pitch_ctrl:add_child(vb:text { text = "(used by Rand)", width = 100 })
+
+  local panel = vb:column {
+    id      = "expr_panel_v" .. v_idx,
+    visible = false,
+    spacing = 6,
+    margin  = 4,
+  }
+  panel:add_child(ctrl)
+  panel:add_child(pitch_ctrl)
+  for _, row in ipairs(lane_rows) do
+    panel:add_child(row)
+  end
+  return panel
 end
 
 local function update_voice(v_idx)
@@ -203,19 +527,21 @@ local function inst_short_name(idx)
   local song = renoise.song()
   if not song or idx < 1 or idx > #song.instruments then return "---" end
   local n = song.instruments[idx].name
-  return n ~= "" and n or ("Instr " .. idx)
+  if n == "" then n = "Instr " .. idx end
+  if #n > 20 then n = string.sub(n, 1, 20) end
+  return n
 end
 
 -- ── step grid ─────────────────────────────────────────────────────────────────
 
 local function build_step_grid(v_idx)
-  local row = vb:row { spacing = 1 }
+  local row = vb:row { spacing = 2 }
   for s = 1, GRID_STEPS do
     row:add_child(vb:button {
       id    = "step_v" .. v_idx .. "_s" .. s,
       text  = "",
       color = COL_INACTIVE,
-      width = 10, height = 10,
+      width = 14, height = 14,
     })
   end
   return row
@@ -263,12 +589,14 @@ local function build_voice_lane(v_idx)
       vb:column { spacing = 2,
         vb:text { text = "Steps" },
         vb:valuebox {
-          id = "steps_v" .. v_idx, min = 1, max = 32, value = voice.steps,
+          id = "steps_v" .. v_idx, min = 1, max = 16, value = voice.steps,
           notifier = function(val)
             voice.steps  = val
             voice.pulses = math.min(voice.pulses, val)
             local pb = vb.views["pulses_v" .. v_idx]
             if pb then pb.max = val; pb.value = voice.pulses end
+            voice:resize_maps(val)
+            refresh_expr_lane(v_idx)
             update_voice(v_idx)
           end,
         },
@@ -640,6 +968,25 @@ local function build_voice_lane(v_idx)
         },
       },
     },
+
+    -- ── Expression sub-panel (Phase 6a) ──────────────────────────────────────
+    vb:row {
+      spacing = 8,
+      vb:button {
+        id    = "expr_btn_v" .. v_idx,
+        text  = "Expr ▼",
+        width = 60, height = 18,
+        notifier = function()
+          voice._expr_expanded = not voice._expr_expanded
+          local ep = vb.views["expr_panel_v" .. v_idx]
+          if ep then ep.visible = voice._expr_expanded end
+          local eb = vb.views["expr_btn_v" .. v_idx]
+          if eb then eb.text = voice._expr_expanded and "Expr ▲" or "Expr ▼" end
+        end,
+      },
+    },
+
+    build_expr_panel(v_idx),
   }
 
   -- ── header (always visible) ───────────────────────────────────────────────
@@ -708,28 +1055,22 @@ end
 local function collect_patterns()
   local patterns = {}
   for vi = 1, #state.voices do
+    state.voices[vi]._scale_index = state.scale_index
+    state.voices[vi]._root_note   = state.root_note
     patterns[vi] = generate_baked_pattern(vi)
     refresh_grid(vi)
   end
   return patterns
 end
 
--- Returns phrase count for the instrument of voice 1 (used for slot max).
-local function current_phrase_count()
+-- Returns the selected phrase slot for the instrument of voice 1.
+-- Render always targets this slot (creates or overwrites).
+local function get_render_slot()
   local song = renoise.song()
   if not song or #state.voices == 0 then return 1 end
   local inst = song.instruments[state.voices[1].instrument_index]
-  return (inst and #inst.phrases > 0) and #inst.phrases or 1
-end
-
--- Sync phrase_slot_box max to actual phrase count (min 1).
-local function update_slot_max()
-  local sv = vb and vb.views["phrase_slot_box"]
-  if not sv then return end
-  local cnt = current_phrase_count()
-  sv.max   = math.max(sv.min, cnt)
-  sv.value = math.min(sv.value, sv.max)
-  state.phrase_slot = sv.value
+  if not inst or #inst.phrases == 0 then return 1 end
+  return math.max(1, song.selected_phrase_index or 1)
 end
 
 -- ── global bar ────────────────────────────────────────────────────────────────
@@ -841,11 +1182,11 @@ local function build_action_bar()
         local sg = vb.views["seed_global"]
         if sg then sg.value = state.seed end
         for vi, voice in ipairs(state.voices) do
-          Evolve.full_randomize(voice, state.seed + vi)
+          Evolve.randomize(voice, state.seed + vi)
         end
-        if PhraseWriter.write_all(state.voices, collect_patterns(), state.phrase_slot) then
-          renoise.app():show_status("AlgoRhythm: Randomized → phrase " .. state.phrase_slot)
-          update_slot_max()
+        local slot = get_render_slot()
+        if PhraseWriter.write_all(state.voices, collect_patterns(), slot) then
+          renoise.app():show_status("AlgoRhythm: Randomized → phrase " .. slot)
         end
       end,
     },
@@ -856,47 +1197,65 @@ local function build_action_bar()
         for _, voice in ipairs(state.voices) do
           Evolve.mutate(voice)
         end
-        if PhraseWriter.write_all(state.voices, collect_patterns(), state.phrase_slot) then
-          renoise.app():show_status("AlgoRhythm: Mutated → phrase " .. state.phrase_slot)
-          update_slot_max()
+        local slot = get_render_slot()
+        if PhraseWriter.write_all(state.voices, collect_patterns(), slot) then
+          renoise.app():show_status("AlgoRhythm: Mutated → phrase " .. slot)
         end
       end,
     },
 
+    -- Render always overwrites the currently selected phrase in the instrument
     vb:button {
       text = "Render to Phrase", width = 130,
       notifier = function()
-        if PhraseWriter.write_all(state.voices, collect_patterns(), state.phrase_slot) then
-          renoise.app():show_status("AlgoRhythm: Written → phrase " .. state.phrase_slot)
-          update_slot_max()
+        local slot = get_render_slot()
+        if PhraseWriter.write_all(state.voices, collect_patterns(), slot) then
+          renoise.app():show_status("AlgoRhythm: Written → phrase " .. slot)
         end
       end,
     },
 
+    -- Separator: visually groups the Append controls together
+    vb:text { text = "|", width = 10 },
+
+    -- Count of phrases to append (1–16); arrows always active
     vb:valuebox {
-      id      = "phrase_slot_box",
-      min     = 1,
-      max     = math.max(1, current_phrase_count()),
-      value   = state.phrase_slot,
-      notifier = function(val)
-        state.phrase_slot = val
-      end,
+      id    = "append_count_box",
+      min   = 1, max = 16, value = state.append_count,
+      width = 52,
+      notifier = function(val) state.append_count = val end,
     },
 
     vb:button {
       text  = "Append Phrase",
       width = 110,
       notifier = function()
-        -- Insert a new phrase right after the current slot and advance to it
-        local new_slot = state.phrase_slot + 1
-        if PhraseWriter.write_all(state.voices, collect_patterns(), new_slot, true) then
-          state.phrase_slot = new_slot
-          local sv = vb.views["phrase_slot_box"]
-          if sv then
-            sv.max   = new_slot
-            sv.value = new_slot
+        local song = renoise.song()
+        if not song or #state.voices == 0 then return end
+        -- Save voice params so mutations don't persist after appending
+        local saved = {}
+        for vi, voice in ipairs(state.voices) do saved[vi] = save_voice_params(voice) end
+        local count    = state.append_count
+        local ok_count = 0
+        for i = 1, count do
+          if i > 1 then
+            for _, voice in ipairs(state.voices) do Evolve.mutate(voice) end
           end
-          renoise.app():show_status("AlgoRhythm: Appended → phrase " .. new_slot)
+          local patterns = collect_patterns()
+          local inst     = song.instruments[state.voices[1].instrument_index]
+          local slot     = (inst and #inst.phrases or 0) + 1
+          if PhraseWriter.write_all(state.voices, patterns, slot, true) then
+            ok_count = ok_count + 1
+          else
+            break
+          end
+        end
+        -- Restore voice params
+        for vi, voice in ipairs(state.voices) do restore_voice_params(voice, saved[vi]) end
+        for vi = 1, #state.voices do refresh_grid(vi) end
+        if ok_count > 0 then
+          renoise.app():show_status(string.format(
+            "AlgoRhythm: Appended %d phrase(s)", ok_count))
         end
       end,
     },
@@ -945,6 +1304,7 @@ function MainPanel.show()
     spacing = 6,
     width   = PANEL_W,
     vb:row { vb:text { text = "AlgoRhythm", font = "bold", style = "strong" } },
+    build_preset_bar(),
     build_global_bar(),
     lanes,
     build_action_bar(),
@@ -971,7 +1331,7 @@ function MainPanel.on_bar_tick(bar_count)
     for vi, voice in ipairs(state.voices) do
       patterns[vi] = voice._cached_pattern or {}
     end
-    PhraseWriter.write_all(state.voices, patterns, state.phrase_slot)
+    PhraseWriter.write_all(state.voices, patterns, get_render_slot())
   end
 end
 
