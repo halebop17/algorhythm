@@ -395,7 +395,7 @@ local function build_expr_panel(v_idx)
     end,
   })
   ctrl:add_child(vb:button {
-    text = "Rand", width = 50,
+    text = "Random", width = 60,
     notifier = function()
       local lp  = vb.views["expr_lane_v" .. v_idx]
       local idx = lp and lp.value or 1
@@ -470,7 +470,7 @@ local function build_expr_panel(v_idx)
     width = 46,
     notifier = function(val) voice.octave_max = val end,
   })
-  pitch_ctrl:add_child(vb:text { text = "(used by Rand)", width = 100 })
+  pitch_ctrl:add_child(vb:text { text = "(used by Random)", width = 110 })
 
   local panel = vb:column {
     id      = "expr_panel_v" .. v_idx,
@@ -974,14 +974,14 @@ local function build_voice_lane(v_idx)
       spacing = 8,
       vb:button {
         id    = "expr_btn_v" .. v_idx,
-        text  = "Expr ▼",
-        width = 60, height = 18,
+        text  = "Expression ▼",
+        width = 90, height = 18,
         notifier = function()
           voice._expr_expanded = not voice._expr_expanded
           local ep = vb.views["expr_panel_v" .. v_idx]
           if ep then ep.visible = voice._expr_expanded end
           local eb = vb.views["expr_btn_v" .. v_idx]
-          if eb then eb.text = voice._expr_expanded and "Expr ▲" or "Expr ▼" end
+          if eb then eb.text = voice._expr_expanded and "Expression ▲" or "Expression ▼" end
         end,
       },
     },
