@@ -165,10 +165,14 @@ function PhraseWriter.write_all(voices, patterns, slot, insert)
         local target = math.min(slot, #instrument.phrases + 1)
         instrument:insert_phrase_at(target)
       else
-        -- Overwrite: create phrase slots up to `slot` if they don't exist yet
+        -- Overwrite: pad with empty phrases up to slot, then delete+recreate
+        -- the target phrase so we always write to a fresh object (avoids
+        -- Renoise silently ignoring writes to an already-populated phrase).
         while #instrument.phrases < slot do
           instrument:insert_phrase_at(#instrument.phrases + 1)
         end
+        instrument:delete_phrase_at(slot)
+        instrument:insert_phrase_at(slot)
       end
 
       local phrase = instrument.phrases[slot]
