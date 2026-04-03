@@ -21,9 +21,9 @@ function SongState.new()
   return self
 end
 
--- Add a voice lane (max 6)
+-- Add a voice lane (max 4)
 function SongState:add_voice()
-  if #self.voices >= 6 then return nil end
+  if #self.voices >= 4 then return nil end
   local v = VoiceState.new("Voice " .. (#self.voices + 1), #self.voices + 1)
   self.voices[#self.voices + 1] = v
   return v

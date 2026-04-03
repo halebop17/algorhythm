@@ -1000,6 +1000,18 @@ local function build_voice_lane(v_idx)
       width = 20, height = 22,
       notifier = function()
         voice._expanded = not voice._expanded
+        -- Accordion: collapse all other voices when expanding this one
+        if voice._expanded then
+          for other_vi, other_voice in ipairs(state.voices) do
+            if other_vi ~= v_idx and other_voice._expanded then
+              other_voice._expanded = false
+              local opv = vb.views["params_v" .. other_vi]
+              if opv then opv.visible = false end
+              local oeb = vb.views["expand_btn_v" .. other_vi]
+              if oeb then oeb.text = ">" end
+            end
+          end
+        end
         local pv = vb.views["params_v"      .. v_idx]
         if pv then pv.visible = voice._expanded end
         local eb = vb.views["expand_btn_v"  .. v_idx]
@@ -1063,14 +1075,9 @@ local function collect_patterns()
   return patterns
 end
 
--- Returns the selected phrase slot for the instrument of voice 1.
--- Render always targets this slot (creates or overwrites).
+-- Render always overwrites phrase slot 1.
 local function get_render_slot()
-  local song = renoise.song()
-  if not song or #state.voices == 0 then return 1 end
-  local inst = song.instruments[state.voices[1].instrument_index]
-  if not inst or #inst.phrases == 0 then return 1 end
-  return math.max(1, song.selected_phrase_index or 1)
+  return 1
 end
 
 -- ── global bar ────────────────────────────────────────────────────────────────
@@ -1167,7 +1174,7 @@ local function build_action_bar()
             v.instrument_index        = song.selected_instrument_index
             v._instrument_initialized = true
           end
-          v._expanded = true
+          v._expanded = false
           rebuild()
         end
       end,
