@@ -993,6 +993,7 @@ local function build_voice_lane(v_idx)
 
   local header = vb:row {
     spacing = 6,
+    width   = PANEL_W - 8,  -- account for parent margin=4 on each side
 
     vb:button {
       id    = "expand_btn_v" .. v_idx,
