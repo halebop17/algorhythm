@@ -1176,7 +1176,7 @@ local function build_action_bar()
     vb:text { text = "", width = 8 },
 
     vb:button {
-      text = "Randomize", width = 90,
+      text = "Randomize Rhythm", width = 120,
       notifier = function()
         state.seed = math.random(0, 100)
         local sg = vb.views["seed_global"]
