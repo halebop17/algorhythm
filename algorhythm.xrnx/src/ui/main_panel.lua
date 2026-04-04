@@ -531,7 +531,11 @@ local function build_expr_panel(v_idx)
   for _, row in ipairs(lane_rows) do
     panel:add_child(row)
   end
-  panel:add_child(vb:space { height = 4 })
+  panel:add_child(vb:space { height = 10 })
+  panel:add_child(vb:row {
+    vb:text { text = "Pitch Lanes", font = "bold", width = PANEL_W - 8 },
+  })
+  panel:add_child(vb:space { height = 2 })
   panel:add_child(pitch_ctrl)
   for _, row in ipairs(pitch_rows) do
     panel:add_child(row)
