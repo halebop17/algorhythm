@@ -13,6 +13,7 @@ local Perlin       = require("src/algorithms/perlin")
 local RandomW      = require("src/algorithms/random_weighted")
 local Straight     = require("src/algorithms/straight")
 local PhraseWriter = require("src/output/phrase_writer")
+local Audition     = require("src/output/audition")
 local Evolve       = require("src/state/evolve")
 local Presets      = require("src/state/presets")
 
@@ -991,6 +992,11 @@ local function build_voice_lane(v_idx)
 
   -- ── header (always visible) ───────────────────────────────────────────────
 
+  local function reset_audition_btn()
+    local ab = vb and vb.views["audition_btn_v" .. v_idx]
+    if ab then ab.color = {0,0,0}; ab.text = "|>" end
+  end
+
   local header = vb:row {
     spacing = 6,
     width   = PANEL_W - 8,  -- account for parent margin=4 on each side
@@ -1017,6 +1023,26 @@ local function build_voice_lane(v_idx)
         if pv then pv.visible = voice._expanded end
         local eb = vb.views["expand_btn_v"  .. v_idx]
         if eb then eb.text = voice._expanded and "v" or ">" end
+      end,
+    },
+
+    vb:button {
+      id    = "audition_btn_v" .. v_idx,
+      text  = "|>",
+      width = 28, height = 22,
+      notifier = function()
+        local ab = vb.views["audition_btn_v" .. v_idx]
+        if Audition.is_active() then
+          Audition.stop()   -- stop_impl calls on_stop which resets button
+        else
+          if ab then ab.color = {50, 180, 80}; ab.text = "||" end
+          -- Reset the All button too if it was active
+          local all_btn = vb.views["audition_all_btn"]
+          if all_btn then all_btn.color = {0,0,0}; all_btn.text = "|> All" end
+          Audition.start({state.voices[v_idx]}, state, function()
+            reset_audition_btn()
+          end)
+        end
       end,
     },
 
@@ -1166,6 +1192,29 @@ local function build_action_bar()
     margin = 4, spacing = 6,
 
     vb:button {
+      id    = "audition_all_btn",
+      text  = "|> All",
+      width = 58,
+      notifier = function()
+        local ab = vb.views["audition_all_btn"]
+        if Audition.is_active() then
+          Audition.stop()
+        else
+          if ab then ab.color = {50, 180, 80}; ab.text = "|| All" end
+          -- Reset per-voice audition buttons
+          for vi = 1, #state.voices do
+            local vb2 = vb.views["audition_btn_v" .. vi]
+            if vb2 then vb2.color = {0,0,0}; vb2.text = "|>" end
+          end
+          Audition.start(state.voices, state, function()
+            local b = vb and vb.views["audition_all_btn"]
+            if b then b.color = {0,0,0}; b.text = "|> All" end
+          end)
+        end
+      end,
+    },
+
+    vb:button {
       text = "+ Voice", width = 75,
       notifier = function()
         local v = state:add_voice()
@@ -1273,6 +1322,7 @@ end
 -- ── rebuild ───────────────────────────────────────────────────────────────────
 
 rebuild = function()
+  Audition.stop()
   if dialog and dialog.visible then dialog:close() end
   dialog = nil
   vb    = nil
