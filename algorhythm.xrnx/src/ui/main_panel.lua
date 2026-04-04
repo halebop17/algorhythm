@@ -994,7 +994,7 @@ local function build_voice_lane(v_idx)
 
   local function reset_audition_btn()
     local ab = vb and vb.views["audition_btn_v" .. v_idx]
-    if ab then ab.color = {0,0,0}; ab.text = "|>" end
+    if ab then ab.color = {0,0,0}; ab.text = "▶" end
   end
 
   local header = vb:row {
@@ -1003,7 +1003,7 @@ local function build_voice_lane(v_idx)
 
     vb:button {
       id    = "expand_btn_v" .. v_idx,
-      text  = voice._expanded and "v" or ">",
+      text  = voice._expanded and "▼" or "▶",
       width = 20, height = 22,
       notifier = function()
         voice._expanded = not voice._expanded
@@ -1015,30 +1015,30 @@ local function build_voice_lane(v_idx)
               local opv = vb.views["params_v" .. other_vi]
               if opv then opv.visible = false end
               local oeb = vb.views["expand_btn_v" .. other_vi]
-              if oeb then oeb.text = ">" end
+              if oeb then oeb.text = "▶" end
             end
           end
         end
         local pv = vb.views["params_v"      .. v_idx]
         if pv then pv.visible = voice._expanded end
         local eb = vb.views["expand_btn_v"  .. v_idx]
-        if eb then eb.text = voice._expanded and "v" or ">" end
+        if eb then eb.text = voice._expanded and "▼" or "▶" end
       end,
     },
 
     vb:button {
       id    = "audition_btn_v" .. v_idx,
-      text  = "|>",
-      width = 28, height = 22,
+      text  = "▶",
+      width = 26, height = 22,
       notifier = function()
         local ab = vb.views["audition_btn_v" .. v_idx]
         if Audition.is_active() then
           Audition.stop()   -- stop_impl calls on_stop which resets button
         else
-          if ab then ab.color = {50, 180, 80}; ab.text = "||" end
+          if ab then ab.color = {50, 180, 80}; ab.text = "■" end
           -- Reset the All button too if it was active
           local all_btn = vb.views["audition_all_btn"]
-          if all_btn then all_btn.color = {0,0,0}; all_btn.text = "|> All" end
+          if all_btn then all_btn.color = {0,0,0}; all_btn.text = "▶ All" end
           Audition.start({state.voices[v_idx]}, state, function()
             reset_audition_btn()
           end)
@@ -1192,30 +1192,7 @@ local function build_action_bar()
     margin = 4, spacing = 6,
 
     vb:button {
-      id    = "audition_all_btn",
-      text  = "|> All",
-      width = 58,
-      notifier = function()
-        local ab = vb.views["audition_all_btn"]
-        if Audition.is_active() then
-          Audition.stop()
-        else
-          if ab then ab.color = {50, 180, 80}; ab.text = "|| All" end
-          -- Reset per-voice audition buttons
-          for vi = 1, #state.voices do
-            local vb2 = vb.views["audition_btn_v" .. vi]
-            if vb2 then vb2.color = {0,0,0}; vb2.text = "|>" end
-          end
-          Audition.start(state.voices, state, function()
-            local b = vb and vb.views["audition_all_btn"]
-            if b then b.color = {0,0,0}; b.text = "|> All" end
-          end)
-        end
-      end,
-    },
-
-    vb:button {
-      text = "+ Voice", width = 75,
+      text = "+ Voice", width = 70,
       notifier = function()
         local v = state:add_voice()
         if v then
@@ -1230,10 +1207,31 @@ local function build_action_bar()
       end,
     },
 
-    vb:text { text = "", width = 8 },
+    vb:button {
+      id    = "audition_all_btn",
+      text  = "▶ All",
+      width = 54,
+      notifier = function()
+        local ab = vb.views["audition_all_btn"]
+        if Audition.is_active() then
+          Audition.stop()
+        else
+          if ab then ab.color = {50, 180, 80}; ab.text = "■ All" end
+          -- Reset per-voice audition buttons
+          for vi = 1, #state.voices do
+            local vb2 = vb.views["audition_btn_v" .. vi]
+            if vb2 then vb2.color = {0,0,0}; vb2.text = "▶" end
+          end
+          Audition.start(state.voices, state, function()
+            local b = vb and vb.views["audition_all_btn"]
+            if b then b.color = {0,0,0}; b.text = "▶ All" end
+          end)
+        end
+      end,
+    },
 
     vb:button {
-      text = "Randomize Rhythm", width = 120,
+      text = "Randomize", width = 80,
       notifier = function()
         state.seed = math.random(0, 100)
         local sg = vb.views["seed_global"]
@@ -1249,7 +1247,7 @@ local function build_action_bar()
     },
 
     vb:button {
-      text = "Mutate", width = 75,
+      text = "Mutate", width = 65,
       notifier = function()
         for _, voice in ipairs(state.voices) do
           Evolve.mutate(voice)
@@ -1261,9 +1259,8 @@ local function build_action_bar()
       end,
     },
 
-    -- Render always overwrites the currently selected phrase in the instrument
     vb:button {
-      text = "Render to Phrase", width = 130,
+      text = "Render to Phrase", width = 120,
       notifier = function()
         local slot = get_render_slot()
         if PhraseWriter.write_all(state.voices, collect_patterns(), slot) then
