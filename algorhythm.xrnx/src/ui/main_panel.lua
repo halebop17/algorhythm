@@ -278,41 +278,53 @@ end
 -- Build the expression sub-panel for one voice lane (pre-builds all 16 slots per lane).
 local function build_expr_panel(v_idx)
   local voice = state.voices[v_idx]
-  local COL_PITCH_B  = {110, 195, 195}  -- cyan for Pitch B lane
-  local COL_PITCH_AB = {160, 120, 200}  -- purple for A/B Prob lane
+  local COL_PITCH_B  = {110, 195, 195}
+  local COL_PITCH_AB = {160, 120, 200}
+
+  -- ── Single-lane configs (shown one at a time via dropdown) ────────────────
   local LANE_CONFIGS = {
-    { key = "vel",      label = "VELOCITY",  color = COL_VEL,      min_val = 1, max_val = 127,
-      map_fn = function() return voice.vel_map      end },
-    { key = "gate",     label = "GATE %",    color = COL_GATE,     min_val = 1, max_val = 100,
-      map_fn = function() return voice.gate_map     end },
-    { key = "pitch_a",  label = "PITCH A",   color = COL_ACTIVE,   min_val = 0, max_val = 119,
-      map_fn = function() return voice.pitch_a_map  end },
-    { key = "pitch_b",  label = "PITCH B",   color = COL_PITCH_B,  min_val = 0, max_val = 119,
-      map_fn = function() return voice.pitch_b_map  end },
-    { key = "pitch_ab", label = "A/B PROB",  color = COL_PITCH_AB, min_val = 0,   max_val = 100,
-      map_fn = function() return voice.pitch_ab_map end },
-    { key = "ratchet",  label = "RATCHET",   color = {200, 90, 50},  min_val = 1,   max_val = 4,
-      map_fn = function() return voice.ratchet_map  end },
-    { key = "delay",    label = "DELAY",     color = {120, 200, 220}, min_val = 0,   max_val = 255,
-      map_fn = function() return voice.delay_map    end },
+    { key = "vel",     label = "VELOCITY", color = COL_VEL,         min_val = 1, max_val = 127,
+      map_fn = function() return voice.vel_map     end },
+    { key = "gate",    label = "GATE %",   color = COL_GATE,        min_val = 1, max_val = 100,
+      map_fn = function() return voice.gate_map    end },
+    { key = "ratchet", label = "RATCHET",  color = {200, 90,  50},  min_val = 1, max_val = 4,
+      map_fn = function() return voice.ratchet_map end },
+    { key = "delay",   label = "DELAY",    color = {120, 200, 220}, min_val = 0, max_val = 255,
+      map_fn = function() return voice.delay_map   end },
   }
 
-  -- Helper: pick a random in-scale note from the voice's octave range
+  -- ── Pitch configs (always visible, stacked — Seqund-style) ───────────────
+  local PITCH_CONFIGS = {
+    { key = "pitch_a",  label = "Pitch A",  color = COL_ACTIVE,
+      min_val = 0, max_val = 119,
+      default = function() return voice.note_value or 48 end,
+      map_fn  = function() return voice.pitch_a_map  end },
+    { key = "pitch_ab", label = "Prob A/B", color = COL_PITCH_AB,
+      min_val = 0, max_val = 100,
+      default = function() return 50 end,
+      map_fn  = function() return voice.pitch_ab_map end },
+    { key = "pitch_b",  label = "Pitch B",  color = COL_PITCH_B,
+      min_val = 0, max_val = 119,
+      default = function() return voice.note_value or 48 end,
+      map_fn  = function() return voice.pitch_b_map  end },
+  }
+
+  local LABEL_W = 72   -- width of the left label column in pitch rows
+
+  -- ── Helper: pick a random in-scale note ──────────────────────────────────
   local function rand_pitch_note()
     if state.scale_index and state.scale_index > 1 then
       local pool = Scales.notes_in_range(
         state.scale_index, state.root_note,
         voice.octave_min or 3, voice.octave_max or 5)
-      if pool and #pool > 0 then
-        return pool[math.random(#pool)]
-      end
+      if pool and #pool > 0 then return pool[math.random(#pool)] end
     end
     local lo = (voice.octave_min or 3) * 12
     local hi = math.min((voice.octave_max or 5) * 12 + 11, 119)
     return math.random(lo, hi)
   end
 
-  -- Build a pre-populated slider row for each lane
+  -- ── Build single-lane rows (Velocity / Gate / Ratchet / Delay) ───────────
   local lane_rows = {}
   for li, lc in ipairs(LANE_CONFIGS) do
     local row = vb:row {
@@ -346,17 +358,80 @@ local function build_expr_panel(v_idx)
           if lbl then lbl.text = string.format("%3d", math.floor(val)) end
         end,
       })
-      -- Number label on every step
-      col:add_child(vb:text {
-        text  = tostring(si),
-        width = 26,
-      })
+      col:add_child(vb:text { text = tostring(si), width = 26 })
       row:add_child(col)
     end
     lane_rows[li] = row
   end
 
-  -- Control row with color swatch + lane picker + actions + title
+  -- ── Build always-visible pitch rows (Pitch A / Prob A/B / Pitch B) ───────
+  local pitch_rows = {}
+  for _, pc in ipairs(PITCH_CONFIGS) do
+    local pkey   = pc.key
+    local pmap   = pc.map_fn
+    local min_v  = pc.min_val
+    local max_v  = pc.max_val
+    local def_fn = pc.default
+
+    -- Left label column: name + Rand + Reset buttons
+    local lbl_col = vb:column { width = LABEL_W, spacing = 2 }
+    lbl_col:add_child(vb:text { text = pc.label, font = "bold", width = LABEL_W })
+    lbl_col:add_child(vb:button {
+      text = "Rand", width = LABEL_W,
+      notifier = function()
+        local m = pmap()
+        if pkey == "pitch_ab" then
+          for i = 1, voice.steps do m[i] = math.random(0, 100) end
+        else
+          for i = 1, voice.steps do m[i] = rand_pitch_note() end
+        end
+        refresh_expr_lane(v_idx)
+      end,
+    })
+    lbl_col:add_child(vb:button {
+      text = "Reset", width = LABEL_W,
+      notifier = function()
+        local m = pmap(); local def = def_fn()
+        for i = 1, voice.steps do m[i] = def end
+        refresh_expr_lane(v_idx)
+      end,
+    })
+
+    local row = vb:row {
+      id      = "expr_" .. pkey .. "_row_v" .. v_idx,
+      spacing = 3,
+    }
+    row:add_child(lbl_col)
+    for s = 1, 16 do
+      local si  = s
+      local def = def_fn()
+      local col = vb:column {
+        id      = "expr_" .. pkey .. "_col_v" .. v_idx .. "_s" .. si,
+        spacing = 2,
+        visible = (si <= voice.steps),
+      }
+      col:add_child(vb:text {
+        id    = "expr_" .. pkey .. "_val_v" .. v_idx .. "_s" .. si,
+        text  = string.format("%3d", math.floor(math.max(min_v, pmap()[si] or def))),
+        width = 26,
+      })
+      col:add_child(vb:minislider {
+        id    = "expr_" .. pkey .. "_sl_v" .. v_idx .. "_s" .. si,
+        min   = min_v, max = max_v,
+        value = math.max(min_v, pmap()[si] or def),
+        width = 26, height = 40,
+        notifier = function(val)
+          pmap()[si] = math.floor(val)
+          local vl = vb.views["expr_" .. pkey .. "_val_v" .. v_idx .. "_s" .. si]
+          if vl then vl.text = string.format("%3d", math.floor(val)) end
+        end,
+      })
+      row:add_child(col)
+    end
+    pitch_rows[#pitch_rows + 1] = row
+  end
+
+  -- ── Control row (single-lane section) ────────────────────────────────────
   local ctrl = vb:row { spacing = 8 }
   ctrl:add_child(vb:button {
     id    = "expr_color_v" .. v_idx,
@@ -366,7 +441,7 @@ local function build_expr_panel(v_idx)
   ctrl:add_child(vb:text { text = "Lane:", width = 36 })
   ctrl:add_child(vb:popup {
     id    = "expr_lane_v" .. v_idx,
-    items = {"Velocity", "Gate %", "Pitch A", "Pitch B", "A/B Prob", "Ratchet", "Delay"},
+    items = {"Velocity", "Gate %", "Ratchet", "Delay"},
     value = 1,
     width = 110,
     notifier = function(idx)
@@ -377,39 +452,26 @@ local function build_expr_panel(v_idx)
       local cs = vb.views["expr_color_v" .. v_idx]
       if cs then cs.color = LANE_CONFIGS[idx].color end
       local tl = vb.views["expr_title_v" .. v_idx]
-      if idx == 5 then
-        if tl then tl.text = "── A/B PROB (0=B, 100=A) ──" end
-      elseif idx == 6 then
-        if tl then tl.text = "── RATCHET (1=off, 2–4=retrigger) ──" end
-      elseif idx == 7 then
+      if idx == 3 then
+        if tl then tl.text = "── RATCHET (1=off, 2-4=retrigger) ──" end
+      elseif idx == 4 then
         if tl then tl.text = "── DELAY (0=none, 255=full step late) ──" end
       else
         if tl then tl.text = "── " .. LANE_CONFIGS[idx].label .. " ──" end
       end
-      -- Octave range row only for Pitch A / Pitch B
-      local pc = vb.views["pitch_ctrl_v" .. v_idx]
-      if pc then pc.visible = (idx == 3 or idx == 4) end
     end,
   })
   ctrl:add_child(vb:button {
-    text = "Random", width = 60,
+    text = "Rand", width = 50,
     notifier = function()
       local lp  = vb.views["expr_lane_v" .. v_idx]
       local idx = lp and lp.value or 1
       local lc  = LANE_CONFIGS[idx]
       local map = lc.map_fn()
-      if idx == 7 then
-        -- Delay lane: random 0-127 per step (keep to first half for musical swing)
+      if idx == 4 then
         for i = 1, voice.steps do map[i] = math.random(0, 127) end
-      elseif idx == 6 then
-        -- Ratchet lane: random 1-4 per step
+      elseif idx == 3 then
         for i = 1, voice.steps do map[i] = math.random(1, 4) end
-      elseif idx == 5 then
-        -- A/B Prob lane: random 0-100 per step
-        for i = 1, voice.steps do map[i] = math.random(0, 100) end
-      elseif idx >= 3 then
-        -- Pitch lane: sample from in-scale note pool
-        for i = 1, voice.steps do map[i] = rand_pitch_note() end
       else
         for i = 1, voice.steps do
           map[i] = math.random(math.floor(lc.max_val * 0.35), lc.max_val)
@@ -426,17 +488,9 @@ local function build_expr_panel(v_idx)
       local lc  = LANE_CONFIGS[idx]
       local map = lc.map_fn()
       local reset_val
-      if idx == 7 then
-        reset_val = 0   -- delay off
-      elseif idx == 6 then
-        reset_val = 1   -- ratchet off
-      elseif idx == 5 then
-        reset_val = 50  -- equal A/B
-      elseif idx >= 3 then
-        reset_val = voice.note_value or 48
-      else
-        reset_val = lc.max_val
-      end
+      if idx == 4 then reset_val = 0
+      elseif idx == 3 then reset_val = 1
+      else reset_val = lc.max_val end
       for i = 1, voice.steps do map[i] = reset_val end
       refresh_expr_lane(v_idx)
     end,
@@ -444,31 +498,29 @@ local function build_expr_panel(v_idx)
   ctrl:add_child(vb:text {
     id   = "expr_title_v" .. v_idx,
     text = "── VELOCITY ──",
-    font = "bold", width = 110,
+    font = "bold", width = 120,
   })
 
-  -- Octave range controls: shown only when Pitch A or Pitch B lane is selected
+  -- ── Octave range (always visible above pitch rows) ────────────────────────
   local pitch_ctrl = vb:row {
     id      = "pitch_ctrl_v" .. v_idx,
     spacing = 8,
-    visible = false,
   }
-  pitch_ctrl:add_child(vb:text { text = "Octave Range:", width = 88 })
+  pitch_ctrl:add_child(vb:text { text = "Octave range:", width = LABEL_W })
   pitch_ctrl:add_child(vb:valuebox {
     id = "pitch_oct_min_v" .. v_idx,
-    min = 0, max = 8, value = voice.octave_min or 3,
-    width = 46,
+    min = 0, max = 8, value = voice.octave_min or 3, width = 46,
     notifier = function(val) voice.octave_min = val end,
   })
   pitch_ctrl:add_child(vb:text { text = "to", width = 16 })
   pitch_ctrl:add_child(vb:valuebox {
     id = "pitch_oct_max_v" .. v_idx,
-    min = 0, max = 8, value = voice.octave_max or 5,
-    width = 46,
+    min = 0, max = 8, value = voice.octave_max or 5, width = 46,
     notifier = function(val) voice.octave_max = val end,
   })
-  pitch_ctrl:add_child(vb:text { text = "(used by Random)", width = 110 })
+  pitch_ctrl:add_child(vb:text { text = "(used by Rand)", width = 100 })
 
+  -- ── Assemble panel ────────────────────────────────────────────────────────
   local panel = vb:column {
     id      = "expr_panel_v" .. v_idx,
     visible = false,
@@ -476,8 +528,12 @@ local function build_expr_panel(v_idx)
     margin  = 4,
   }
   panel:add_child(ctrl)
-  panel:add_child(pitch_ctrl)
   for _, row in ipairs(lane_rows) do
+    panel:add_child(row)
+  end
+  panel:add_child(vb:space { height = 4 })
+  panel:add_child(pitch_ctrl)
+  for _, row in ipairs(pitch_rows) do
     panel:add_child(row)
   end
   return panel
@@ -1084,6 +1140,7 @@ local function build_voice_lane(v_idx)
     margin  = 4,
     spacing = 2,
     width   = PANEL_W,
+    vb:space { width = PANEL_W - 8 },   -- force group border to always fill full width
     header,
     params_panel,
   }
