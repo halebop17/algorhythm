@@ -994,7 +994,7 @@ local function build_voice_lane(v_idx)
 
   local function reset_audition_btn()
     local ab = vb and vb.views["audition_btn_v" .. v_idx]
-    if ab then ab.color = {0,0,0}; ab.text = "▶" end
+    if ab then ab.color = {200, 100, 0}; ab.text = "▶" end
   end
 
   local header = vb:row {
@@ -1029,6 +1029,7 @@ local function build_voice_lane(v_idx)
     vb:button {
       id    = "audition_btn_v" .. v_idx,
       text  = "▶",
+      color = {200, 100, 0},
       width = 26, height = 22,
       notifier = function()
         local ab = vb.views["audition_btn_v" .. v_idx]
@@ -1223,7 +1224,7 @@ local function build_action_bar()
           -- Reset per-voice audition buttons
           for vi = 1, #state.voices do
             local vb2 = vb.views["audition_btn_v" .. vi]
-            if vb2 then vb2.color = {0,0,0}; vb2.text = "▶" end
+            if vb2 then vb2.color = {200, 100, 0}; vb2.text = "▶" end
           end
           local patterns = collect_patterns()
           local entries  = {}
