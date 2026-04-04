@@ -677,7 +677,14 @@ local function build_voice_lane(v_idx)
           vb:valuebox {
             id = "note_v" .. v_idx, min = 0, max = 83, value = math.min(voice.note_value, 83),
             notifier = function(val)
+              local old = voice.note_value
               voice.note_value = val
+              -- Shift pitch map steps that matched the old base note to the new one
+              for i = 1, voice.steps do
+                if voice.pitch_a_map[i] == old then voice.pitch_a_map[i] = val end
+                if voice.pitch_b_map[i] == old then voice.pitch_b_map[i] = val end
+              end
+              refresh_expr_lane(v_idx)
               local lbl = vb.views["note_lbl_v" .. v_idx]
               if lbl then lbl.text = Scales.note_name(val) end
             end,
