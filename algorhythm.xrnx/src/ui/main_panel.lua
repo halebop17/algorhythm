@@ -51,10 +51,10 @@ local COL_GATE     = { 70, 150, 215}  -- blue:  gate lane
 local GRID_STEPS   = 16
 
 local VOICE_COLORS = {
-  { 12,  28,  20},   -- voice 1: near-black dark green
-  { 50, 105,  78},   -- voice 2: forest green
-  { 80, 150, 120},   -- voice 3: teal
-  {182, 222, 202},   -- voice 4: light mint
+  { 25,  35, 120},   -- voice 1: dark navy
+  {  0, 120, 185},   -- voice 2: ocean blue
+  {  0, 200, 220},   -- voice 3: bright cyan
+  {240, 225, 190},   -- voice 4: cream
 }
 
 local ROOT_NAMES = {"C","C#","D","D#","E","F","F#","G","G#","A","A#","B"}
