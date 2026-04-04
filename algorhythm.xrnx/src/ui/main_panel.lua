@@ -1039,7 +1039,10 @@ local function build_voice_lane(v_idx)
           -- Reset the All button too if it was active
           local all_btn = vb.views["audition_all_btn"]
           if all_btn then all_btn.color = {0,0,0}; all_btn.text = "▶ All" end
-          Audition.start({state.voices[v_idx]}, state, function()
+          state.voices[v_idx]._scale_index = state.scale_index
+          state.voices[v_idx]._root_note   = state.root_note
+          local pat = generate_baked_pattern(v_idx)
+          Audition.start({{voice = state.voices[v_idx], pattern = pat}}, state.phrase_length, function()
             reset_audition_btn()
           end)
         end
@@ -1222,7 +1225,12 @@ local function build_action_bar()
             local vb2 = vb.views["audition_btn_v" .. vi]
             if vb2 then vb2.color = {0,0,0}; vb2.text = "▶" end
           end
-          Audition.start(state.voices, state, function()
+          local patterns = collect_patterns()
+          local entries  = {}
+          for vi, v in ipairs(state.voices) do
+            entries[#entries + 1] = { voice = v, pattern = patterns[vi] or {} }
+          end
+          Audition.start(entries, state.phrase_length, function()
             local b = vb and vb.views["audition_all_btn"]
             if b then b.color = {0,0,0}; b.text = "▶ All" end
           end)
