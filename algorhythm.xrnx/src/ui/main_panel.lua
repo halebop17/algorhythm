@@ -377,7 +377,7 @@ local function build_expr_panel(v_idx)
     local lbl_col = vb:column { width = LABEL_W, spacing = 2 }
     lbl_col:add_child(vb:text { text = pc.label, font = "bold", width = LABEL_W })
     lbl_col:add_child(vb:button {
-      text = "Rand", width = LABEL_W,
+      text = "Random", width = LABEL_W,
       notifier = function()
         local m = pmap()
         if pkey == "pitch_ab" then
@@ -462,7 +462,7 @@ local function build_expr_panel(v_idx)
     end,
   })
   ctrl:add_child(vb:button {
-    text = "Rand", width = 50,
+    text = "Random", width = 60,
     notifier = function()
       local lp  = vb.views["expr_lane_v" .. v_idx]
       local idx = lp and lp.value or 1
