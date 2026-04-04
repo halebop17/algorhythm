@@ -2,6 +2,8 @@
 
 AlgoRhythm is a Renoise tool that generates algorithmic rhythms and melodic phrases using mathematical pattern generators. It writes directly into Renoise native phrases, which you can then assign to instrument phrase maps and trigger from the pattern editor.
 
+It was inspired by [Subsequence](https://github.com/halebop17/subsequence) — the goal was to have a simple way to use those same algorithms to create phrases directly inside Renoise.
+
 ---
 
 ## Table of Contents
@@ -18,6 +20,7 @@ AlgoRhythm is a Renoise tool that generates algorithmic rhythms and melodic phra
 10. [Presets](#10-presets)
 11. [Render and Append](#11-render-and-append)
 12. [Evolve and Mutate](#12-evolve-and-mutate)
+13. [Audition](#13-audition)
 
 ---
 
@@ -43,10 +46,10 @@ These settings affect all voices.
 | Control | Description |
 |---|---|
 | **Scale** | Musical scale used to quantize pitch lanes (Chromatic = no quantization) |
-| **Root Note** | Root of the selected scale (C, C#, D … B) |
+| **Root Note** | Root of the selected scale (C, C#, D … B). Only affects pitch quantization — it has no effect on rhythm, step firing, or velocity. Has no effect at all when Scale is set to Chromatic |
 | **Seed** | Starting seed for all random generators. Same seed + same settings = same pattern |
 | **Evolve** | Off / Slow / Fast — automatically mutates pattern parameters over time as the song plays. Slow mutates every 4 bars, Fast every bar |
-| **Phrase Length** | Total number of lines written to the phrase (16, 32, 64, 128 …). When longer than Steps, the pattern is tiled and mutated across multiple blocks to fill the phrase |
+| **Phrase Length** | Total number of lines written to the phrase. **Auto (0)** uses each voice's own step count as the phrase length. Fixed values (16, 32, 64, 128, 256, 512) tile and mutate the pattern across multiple blocks to fill the full phrase — see [Section 13](#13-audition) for how this interacts with Audition playback |
 
 ---
 
@@ -237,9 +240,23 @@ The **A/B Prob** lane controls the per-step probability of playing Pitch A vs Pi
 
 Because A/B Prob is per-step, you can shape the melodic behavior differently for each position in the sequence — for example, always playing Pitch A on the downbeat (step 1) while mixing randomly on off-beats.
 
+### The Note Field and Pitch Maps
+
+The **Note** field (in the voice parameters row) is the *base pitch anchor*. Its relationship to the pitch lanes:
+
+| Situation | What happens |
+|---|---|
+| Voice is created | All Pitch A and Pitch B steps initialize to the Note field value |
+| You drag a pitch slider | That step becomes independent — manually set, no longer tracking Note |
+| You click **Rand** on a pitch row | All active steps get random notes — fully decoupled from Note |
+| You change the **Note** field | Any step still sitting on the *old* base note shifts to the new one; manually customized or randomized steps are left unchanged |
+| You click **Reset** on Pitch A or Pitch B | All steps snap back to the current Note field value |
+
+In short: Note is the "home pitch". The sliders are the actual per-step values. Changing Note and changing sliders do not silently overwrite each other — the Note field only moves steps that are still at the previous default.
+
 ### Rand for Pitch Lanes
 
-When you click **Rand** on the Pitch A or Pitch B lane, notes are picked randomly from the **Octave Range** (visible when a pitch lane is selected), respecting the active Scale and Root Note. If Scale is set to Chromatic, notes are picked freely within the octave range.
+When you click **Rand** on the Pitch A or Pitch B lane, notes are picked randomly from the **Octave Range** (always visible below the lane controls), respecting the active Scale and Root Note. If Scale is set to Chromatic, notes are picked freely within the octave range.
 
 Clicking **Rand** on the A/B Prob lane assigns a random probability (0–100) to each step independently.
 
@@ -321,6 +338,17 @@ If a user preset with that name already exists it is overwritten. The preset cap
 
 Select the user preset from the dropdown, then click **Delete**. Built-in presets (★) cannot be deleted.
 
+### Where Presets Are Stored
+
+User presets are saved to a `user_presets.lua` file inside the tool's own bundle folder:
+
+```
+~/Library/Preferences/Renoise/V3.5.x/Scripts/Tools/com.algorhythm.xrnx/user_presets.lua   (macOS)
+%AppData%\Renoise\V3.5.x\Scripts\Tools\com.algorhythm.xrnx\user_presets.lua               (Windows)
+```
+
+It is a plain text file you can open in any editor. **Note:** if you reinstall or replace the tool folder, this file will be overwritten — back it up separately if you have presets you want to keep.
+
 ---
 
 ## 11. Render and Append
@@ -361,6 +389,45 @@ The mutation type depends on the algorithm:
 - Cellular — advances the CA generation
 - Logistic — nudges the r parameter toward chaos
 - Perlin — advances the time offset for smooth drift
+
+---
+
+---
+
+## 13. Audition
+
+The Audition feature lets you preview patterns through your instruments in real time, without needing to render to a phrase or start Renoise's transport.
+
+### Per-voice Audition (▶)
+
+Each voice header has a **▶** button. Clicking it:
+
+1. Bakes the voice's pattern (applying any Evolve mutations across blocks, just like Render/Append would).
+2. Starts a step-sequencer timer that fires MIDI notes through the voice's assigned instrument at the current BPM and LPB.
+3. The button turns green and shows **■** while active. Click **■** to stop.
+
+### Audition All (▶ All)
+
+The **▶ All** button in the action bar auditions every voice simultaneously. All voices are baked at once (same as collecting patterns for Render), so polyrhythm between voices is preserved.
+
+Click **■ All** to stop all voices at once.
+
+### Phrase Length and Audition
+
+The Phrase Length setting directly controls how audition behaves:
+
+| Phrase Length | Audition behavior |
+|---|---|
+| **Auto (0)** | Each voice loops its own pattern indefinitely (true polyrhythm — a 3-step voice and an 8-step voice drift against each other). Click ■ to stop manually. |
+| **Fixed (e.g. 128)** | All voices receive a fully baked 128-step pattern with mutations embedded between blocks. Audition plays through exactly 128 steps, then auto-stops. The button resets automatically. |
+
+With a fixed Phrase Length, different per-voice step counts produce natural variation: a voice set to 16 steps will loop 8 times through its base pattern (with mutations between each cycle) over 128 steps.
+
+### Notes
+
+- Audition uses `trigger_instrument_note_on/off` — it works regardless of whether Renoise's transport is running.
+- Starting a new audition automatically stops any currently running audition.
+- Audition reads the velocity map and pitch maps from each voice's expression lanes, wrapping them correctly for baked patterns.
 
 ---
 
